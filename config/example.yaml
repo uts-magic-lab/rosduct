@@ -1,0 +1,25 @@
+# ROSbridge websocket server info
+rosbridge_ip: localhost
+rosbridge_port: 9090
+# Topics being published in the robot to expose locally
+remote_topics: [
+                    ['/joint_states', 'sensor_msgs/JointState'], 
+                    ['/tf', 'tf2_msgs/TFMessage'],
+                    ['/scan', 'sensor_msgs/LaserScan']
+                    ]
+# Topics being published in the local roscore to expose remotely
+local_topics: [
+                    ['/test1', 'std_msgs/String'],
+                    ['/closest_point', 'sensor_msgs/LaserScan']
+                    ]
+# Services running in the robot to expose locally
+remote_services: [
+                    ['/rosout/get_loggers', 'roscpp/GetLoggers']
+                    ]
+# Services running locally to expose to the robot
+local_services: [
+                    ['/add_two_ints', 'beginner_tutorials/AddTwoInts']
+                    ]
+# Parameters to be sync, they will be polled to stay in sync
+parameters: ['/robot_description']
+parameter_polling_hz: 1

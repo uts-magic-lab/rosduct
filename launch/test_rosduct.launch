@@ -1,0 +1,6 @@
+<launch>
+  <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch"/>
+  <node pkg="rosduct" name="rosduct" type="rosduct_main.py" output="screen">
+    <rosparam command="load" file="$(find rosduct)/config/example.yaml" />
+  </node>
+</launch>

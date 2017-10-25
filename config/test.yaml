@@ -1,0 +1,24 @@
+# ROSbridge websocket server info
+rosbridge_ip: localhost
+rosbridge_port: 9090
+# Topics being published in the robot to expose locally
+remote_topics: [
+                    ['/test_suite/header_2', 'std_msgs/Header'],
+                    ['/test_suite/text_1', 'std_msgs/String']
+                    ]
+# Topics being published in the local roscore to expose remotely
+local_topics: [
+                    ['/test_suite/header_1', 'std_msgs/Header'],
+                    ['/test_suite/text_2', 'std_msgs/String']
+                    ]
+# Services running in the robot to expose locally
+remote_services: [
+                    ['/test_suite/service_1', 'roscpp/GetLoggers']
+                    ]
+# Services running locally to expose to the robot
+local_services: [
+                    ['/test_suite/service_2', 'roscpp/GetLoggers']
+                    ]
+# Parameters to be sync, they will be polled to stay in sync
+parameters: ['/robot_description']
+parameter_polling_hz: 1

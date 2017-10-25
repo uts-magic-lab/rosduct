@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package>
+  <name>rosduct</name>
+  <version>0.0.0</version>
+  <description>ROSduct, the duct of ROS messages. ROSduct acts as a proxy to expose ROS topics, services and parameters from a remote roscore into a local roscore via the [rosbridge protocol](https://github.com/RobotWebTools/rosbridge_suite/blob/develop/ROSBRIDGE_PROTOCOL.md).</description>
+
+  <maintainer email="Sammy.Pfeiffer@student.uts.edu.au">Sammy Pfeiffer</maintainer>
+
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>rospy</build_depend>
+  <run_depend>rospy</run_depend>
+
+
+</package>

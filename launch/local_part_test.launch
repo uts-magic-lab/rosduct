@@ -1,0 +1,6 @@
+<launch>
+  <node pkg="rosduct" name="rosduct" type="rosduct_main.py" output="screen">
+    <rosparam command="load" file="$(find rosduct)/config/test.yaml" />
+  </node>
+  <node pkg="rosduct" name="remote_test_node" type="test_node.py" args="2 1"/>
+</launch>

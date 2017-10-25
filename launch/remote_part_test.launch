@@ -1,0 +1,4 @@
+<launch>
+    <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch"/>
+    <node pkg="rosduct" name="remote_test_node" type="test_node.py" args="1 2"/>
+</launch>

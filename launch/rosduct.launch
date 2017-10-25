@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="rosduct" name="rosduct" type="rosduct_main.py" output="screen"/>
+</launch>
