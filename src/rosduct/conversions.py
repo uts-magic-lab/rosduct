@@ -103,8 +103,8 @@ def from_dict_to_ROS(dict_msg, ros_message_type):
     """
     msg_class = get_ROS_class(ros_message_type)
     msg_instance = msg_class()
+    # Workaround
     if len(dict_msg) == 1:
-        print("  ########         DICT MESSAGE IS SIZE 1 ONLY    ")
         dict_msg = [dict_msg]
     fill_message_args(msg_instance, dict_msg)
     return msg_instance

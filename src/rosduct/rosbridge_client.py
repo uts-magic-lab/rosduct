@@ -244,7 +244,7 @@ class ROSBridgeClient(WebSocketClient):
         data = json.loads(message.data)
         if 'topic' in data:
             # Note that the callback argument MUST be named message (damn.)
-            dispatcher.send(signal=data.get('topic'), sender=data.get('topic'), message=data.get('msg'))
+            dispatcher.send(signal=data.get('topic'), message=data.get('msg'))
         if 'service' in data:
             if data.get('op') == 'service_response':
                 service_id = data.get('id')

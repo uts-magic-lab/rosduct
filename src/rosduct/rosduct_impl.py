@@ -84,6 +84,14 @@ class ROSduct(object):
 
         self.initialize()
 
+    def general_cb(self, message):
+        topic_name = message.get('topic')
+        topic_type = 'IDONTKNOW'
+        rospy.loginfo("Remote ROSBridge subscriber from topic " +
+                      topic_name + ' of type ' +
+                      topic_type + ' got data: ' + str(message.get('msg')) +
+                      ' which is republished locally.')
+
     def initialize(self):
         """
         Initialize creating all necessary bridged clients and servers.
@@ -108,7 +116,12 @@ class ROSduct(object):
                                      get_ROS_class(topic_type),
                                      queue_size=1)
 
-            def custom_callback_remote_to_local(message):
+            # the keyword arguments are mandatory for the closure
+            # to do it's actual job
+            def custom_callback_remote_to_local(message,
+                                                topic_name=topic_name,
+                                                topic_type=topic_type,
+                                                rospub=rospub):
                 rospy.loginfo("Remote ROSBridge subscriber from topic " +
                               topic_name + ' of type ' +
                               topic_type + ' got data: ' + str(message) +
@@ -116,7 +129,9 @@ class ROSduct(object):
                 msg = from_dict_to_ROS(message, topic_type)
                 rospub.publish(msg)
             bridgesub = self.client.subscriber(
-                topic_name, topic_type, custom_callback_remote_to_local)
+                topic_name, topic_type,
+                custom_callback_remote_to_local)
+            # self.general_cb)
             self._instances['topics'].append(
                 {topic_name:
                  {'rospub': rospub,
@@ -126,7 +141,10 @@ class ROSduct(object):
         for topic_name, topic_type in self.local_topics:
             bridgepub = self.client.publisher(topic_name, topic_type)
 
-            def custom_callback_local_to_remote(message):
+            def custom_callback_local_to_remote(message,
+                                                topic_name=topic_name,
+                                                topic_type=topic_type,
+                                                bridgepub=bridgepub):
                 rospy.loginfo("Local subscriber from topic " +
                               topic_name + ' of type ' +
                               topic_type + ' got data: ' + str(message) +
