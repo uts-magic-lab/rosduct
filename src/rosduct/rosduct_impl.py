@@ -112,8 +112,13 @@ class ROSduct(object):
         self._instances = {'topics': [],
                            'servers': []}
         for topic_name, topic_type in self.remote_topics:
+            # TODO: Add smart logic with a SubscribeListener
+            # to only actually subscribe with the ROSBridge client
+            # if someone is listening
+            # sl = SubscribeListener()
             rospub = rospy.Publisher(topic_name,
                                      get_ROS_class(topic_type),
+                                     # subscriber_listener=,
                                      queue_size=1)
 
             # the keyword arguments are mandatory for the closure
@@ -122,12 +127,14 @@ class ROSduct(object):
                                                 topic_name=topic_name,
                                                 topic_type=topic_type,
                                                 rospub=rospub):
-                rospy.loginfo("Remote ROSBridge subscriber from topic " +
-                              topic_name + ' of type ' +
-                              topic_type + ' got data: ' + str(message) +
-                              ' which is republished locally.')
-                msg = from_dict_to_ROS(message, topic_type)
-                rospub.publish(msg)
+                rospy.logdebug("Remote ROSBridge subscriber from topic " +
+                               topic_name + ' of type ' +
+                               topic_type + ' got data: ' + str(message) +
+                               ' which is republished locally.')
+                # optimize
+                if rospub.get_num_connections() >= 1:
+                    msg = from_dict_to_ROS(message, topic_type)
+                    rospub.publish(msg)
             bridgesub = self.client.subscriber(
                 topic_name, topic_type,
                 custom_callback_remote_to_local)
@@ -145,10 +152,10 @@ class ROSduct(object):
                                                 topic_name=topic_name,
                                                 topic_type=topic_type,
                                                 bridgepub=bridgepub):
-                rospy.loginfo("Local subscriber from topic " +
-                              topic_name + ' of type ' +
-                              topic_type + ' got data: ' + str(message) +
-                              ' which is republished remotely.')
+                rospy.logdebug("Local subscriber from topic " +
+                               topic_name + ' of type ' +
+                               topic_type + ' got data: ' + str(message) +
+                               ' which is republished remotely.')
                 dict_msg = from_ROS_to_dict(message)
                 bridgepub.publish(dict_msg)
 
