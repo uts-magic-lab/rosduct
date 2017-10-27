@@ -84,14 +84,6 @@ class ROSduct(object):
 
         self.initialize()
 
-    def general_cb(self, message):
-        topic_name = message.get('topic')
-        topic_type = 'IDONTKNOW'
-        rospy.loginfo("Remote ROSBridge subscriber from topic " +
-                      topic_name + ' of type ' +
-                      topic_type + ' got data: ' + str(message.get('msg')) +
-                      ' which is republished locally.')
-
     def initialize(self):
         """
         Initialize creating all necessary bridged clients and servers.
@@ -112,61 +104,106 @@ class ROSduct(object):
         self._instances = {'topics': [],
                            'servers': []}
         for topic_name, topic_type in self.remote_topics:
-            # TODO: Add smart logic with a SubscribeListener
-            # to only actually subscribe with the ROSBridge client
-            # if someone is listening
-            # sl = SubscribeListener()
             rospub = rospy.Publisher(topic_name,
                                      get_ROS_class(topic_type),
-                                     # subscriber_listener=,
+                                     # SubscribeListener added later
                                      queue_size=1)
 
-            # the keyword arguments are mandatory for the closure
-            # to do it's actual job
-            def custom_callback_remote_to_local(message,
-                                                topic_name=topic_name,
-                                                topic_type=topic_type,
-                                                rospub=rospub):
-                rospy.logdebug("Remote ROSBridge subscriber from topic " +
-                               topic_name + ' of type ' +
-                               topic_type + ' got data: ' + str(message) +
-                               ' which is republished locally.')
-                # optimize
-                if rospub.get_num_connections() >= 1:
-                    msg = from_dict_to_ROS(message, topic_type)
-                    rospub.publish(msg)
-            bridgesub = self.client.subscriber(
-                topic_name, topic_type,
-                custom_callback_remote_to_local)
-            # self.general_cb)
+            cb_r_to_l = self.create_callback_from_remote_to_local(topic_name,
+                                                                  topic_type,
+                                                                  rospub)
+            subl = self.create_subscribe_listener(topic_name,
+                                                  topic_type,
+                                                  cb_r_to_l)
+            rospub.impl.add_subscriber_listener(subl)
             self._instances['topics'].append(
                 {topic_name:
                  {'rospub': rospub,
-                  'bridgesub': bridgesub}
+                  'bridgesub': None}
                  })
 
         for topic_name, topic_type in self.local_topics:
             bridgepub = self.client.publisher(topic_name, topic_type)
 
-            def custom_callback_local_to_remote(message,
-                                                topic_name=topic_name,
-                                                topic_type=topic_type,
-                                                bridgepub=bridgepub):
-                rospy.logdebug("Local subscriber from topic " +
-                               topic_name + ' of type ' +
-                               topic_type + ' got data: ' + str(message) +
-                               ' which is republished remotely.')
-                dict_msg = from_ROS_to_dict(message)
-                bridgepub.publish(dict_msg)
+            cb_l_to_r = self.create_callback_from_local_to_remote(topic_name,
+                                                                  topic_type,
+                                                                  bridgepub)
 
             rossub = rospy.Subscriber(topic_name,
                                       get_ROS_class(topic_type),
-                                      custom_callback_local_to_remote)
+                                      cb_l_to_r)
             self._instances['topics'].append(
                 {topic_name:
                  {'rossub': rossub,
                   'bridgepub': bridgepub}
                  })
+
+    def create_callback_from_remote_to_local(self, topic_name,
+                                             topic_type,
+                                             rospub):
+        # Note: argument MUST be named 'message' as
+        # that's the keyword given to pydispatch
+        def callback_remote_to_local(message):
+            rospy.logdebug("Remote ROSBridge subscriber from topic " +
+                           topic_name + ' of type ' +
+                           topic_type + ' got data: ' + str(message) +
+                           ' which is republished locally.')
+            # Only convert and publish with subscribers
+            if rospub.get_num_connections() >= 1:
+                msg = from_dict_to_ROS(message, topic_type)
+                rospub.publish(msg)
+        return callback_remote_to_local
+
+    def create_callback_from_local_to_remote(self,
+                                             topic_name,
+                                             topic_type,
+                                             bridgepub):
+        def callback_local_to_remote(message):
+            rospy.loginfo("Local subscriber from topic " +
+                          topic_name + ' of type ' +
+                          topic_type + ' got data: ' + str(message) +
+                          ' which is republished remotely.')
+            dict_msg = from_ROS_to_dict(message)
+            bridgepub.publish(dict_msg)
+        return callback_local_to_remote
+
+    def create_subscribe_listener(self,
+                                  topic_name,
+                                  topic_type,
+                                  cb_r_to_l):
+        # We create a SubscribeListener that will
+        # create a rosbridge subscriber on demand
+        # and also unregister it if no one is listening
+        class CustomSubscribeListener(rospy.SubscribeListener):
+            def __init__(this):
+                super(CustomSubscribeListener, this).__init__()
+                this.bridgesub = None
+
+            def peer_subscribe(this, tn, tp, pp):
+                # Only make a new subscriber if there wasn't one
+                if this.bridgesub is None:
+                    rospy.logdebug("We have a first subscriber to: " + topic_name)
+                    this.bridgesub = self.client.subscriber(
+                        topic_name,
+                        topic_type,
+                        cb_r_to_l)
+                    for idx, topic_d in enumerate(self._instances['topics']):
+                        if topic_d.get(topic_name):
+                            self._instances['topics'][idx][topic_name]['bridgesub'] = this.bridgesub
+                            break
+
+            def peer_unsubscribe(this, tn, num_peers):
+                # Unsubscribe if there isnt anyone left
+                if num_peers < 1:
+                    rospy.logdebug("There are no more subscribers to: " + topic_name)
+                    self.client.unsubscribe(this.bridgesub)
+                    this.bridgesub = None
+                    # May be redundant if it's actually a reference to this.bridgesub already
+                    for idx, topic_d in enumerate(self._instances['topics']):
+                        if topic_d.get(topic_name):
+                            self._instances['topics'][idx][topic_name]['bridgesub'] = None
+                            break
+        return CustomSubscribeListener()
 
     def check_if_msgs_are_installed(self):
         """
