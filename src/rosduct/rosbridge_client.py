@@ -14,7 +14,7 @@ from pydispatch import dispatcher
 class ROSBridgeClient(WebSocketClient):
     """ROSBridgeClient extends WebSocketClient and manages connection to the server and all interactions with ROS.
 
-    It keeps a record of all publishers, subscriber, service request callbacks and action clients.
+    It keeps a record of all publishers, subscriber, service request callbacks, service servers and action clients.
     """
     def __init__(self, ip, port=9090):
         """Constructor for ROSBridgeClient
@@ -45,6 +45,173 @@ class ROSBridgeClient(WebSocketClient):
         """
         self._id_counter += 1
         return self._id_counter
+
+    def get_topics(self):
+        """Get topic list, like using `rostopic list`.
+
+        Returns:
+            A list of topic names.
+        """
+        service_client = self.service_client('/rosapi/topics', 'rosapi/Topics')
+        result = {
+            'responded': False,
+            'topics': []
+        }
+
+        def cb(success, values):
+            result['responded'] = True
+            if success:
+                result['topics'] = values.get('topics')
+
+        service_client.request({}, cb)
+        while not result.get('responded'):
+            time.sleep(0.1)
+        return result.get('topics')
+
+    def get_topic_type(self, topic_name):
+        """Get the type of a topic with given name, like using `rostopic type`.
+
+        Args:
+            topic_name (str): The name of the topic.
+
+        Returns:
+            The type of the given topic
+        """
+        service_client = self.service_client('/rosapi/topic_type', 'rosapi/TopicType')
+        result = {
+            'responded': False,
+            'type': None
+        }
+
+        def cb(success, values):
+            result['responded'] = True
+            if success:
+                result['type'] = values.get('type')
+
+        service_client.request({'topic': topic_name}, cb)
+        while not result.get('responded'):
+            time.sleep(0.1)
+        return result.get('type')
+
+    def get_services(self):
+        """Get topic list, like using `rosservice list`.
+
+        Returns:
+            A list of service names.
+        """
+        service_client = self.service_client('/rosapi/services', 'rosapi/Services')
+        result = {
+            'responded': False,
+            'services': []
+        }
+
+        def cb(success, values):
+            result['responded'] = True
+            if success:
+                result['services'] = values.get('services')
+
+        service_client.request({}, cb)
+        while not result.get('responded'):
+            time.sleep(0.1)
+        return result.get('services')
+
+    def get_service_type(self, service_name):
+        """Get the type of a service with given name, like using `rosservice type`.
+
+        Args:
+            service_name (str): The name of the service.
+
+        Returns:
+            The type of the given service
+        """
+        service_client = self.service_client('/rosapi/service_type', 'rosapi/ServiceType')
+        result = {
+            'responded': False,
+            'type': None
+        }
+
+        def cb(success, values):
+            result['responded'] = True
+            if success:
+                result['type'] = values.get('type')
+
+        service_client.request({'service': service_name}, cb)
+        while not result.get('responded'):
+            time.sleep(0.1)
+        return result.get('type')
+
+    def get_params(self):
+        """Get params list, like using `rosparam list`.
+
+        Returns:
+            A list of parameter names.
+        """
+        service_client = self.service_client('/rosapi/get_param_names', 'rosapi/GetParamNames')
+        result = {
+            'responded': False,
+            'params': []
+        }
+
+        def cb(success, values):
+            result['responded'] = True
+            if success:
+                result['params'] = values.get('names')
+
+        service_client.request({}, cb)
+        while not result.get('responded'):
+            time.sleep(0.1)
+        return result.get('params')
+
+    def get_param_value(self, param_name):
+        """Get the value of a parameter with the given name, like using `rosparam get`.
+
+        Args:
+            param_name (str): The name of the parameter.
+
+        Returns:
+            The value of the parameter if exist.
+        """
+        service_client = self.service_client('/rosapi/get_param', 'rosapi/GetParam')
+        result = {
+            'responded': False,
+            'value': None
+        }
+
+        def cb(success, values):
+            result['responded'] = True
+            if success:
+                result['value'] = values.get('value')
+                result['success'] = True
+
+        service_client.request({'name': param_name}, cb)
+        while not result.get('responded'):
+            time.sleep(0.1)
+        return result.get('value')
+
+    def set_param_value(self, param_name, value):
+        """Get the value of a parameter with the given name, like using `rosparam get`.
+
+        Args:
+            param_name (str): The name of the parameter.
+            value: The new value to be set for parameter with the given name.
+
+        Returns:
+            Whether the set operation is successful or not.
+        """
+        service_client = self.service_client('/rosapi/set_param', 'rosapi/SetParam')
+        result = {
+            'responded': False,
+            'succeed': False
+        }
+
+        def cb(success, values):
+            result['succeed'] = success
+            result['responded'] = True
+
+        service_client.request({'name': param_name, 'value': json.dumps(value)}, cb)
+        while not result.get('responded'):
+            time.sleep(0.1)
+        return result.get('succeed')
 
     def publisher(self, topic_name, message_type, latch=False, queue_size=1):
         """Create a _Publisher object if the given topic hasn't been advertised, otherwise return the existing
@@ -274,6 +441,17 @@ class ROSBridgeClient(WebSocketClient):
             error (str): A human readable error message.
         """
         print(error)
+
+    def __del__(self):
+        for publisher in self._publishers:
+            self._publishers[publisher].unregister()
+        for subscriber in self._subscribers:
+            self._subscribers[subscriber].unregister()
+        for service_server in self._service_servers:
+            self._service_servers[service_server].unregister()
+        for action_client in self._action_clients:
+            self._action_clients[action_client].unregister()
+        self.close()
 
 
 class _Publisher(object):
