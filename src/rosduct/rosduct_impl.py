@@ -79,6 +79,7 @@ class ROSduct(object):
         # Parameters
         self.rate_hz = rospy.get_param('~parameter_polling_hz', 1)
         self.parameters = rospy.get_param('~parameters', [])
+        self.last_params = {}
 
         self.check_if_msgs_are_installed()
 
@@ -138,6 +139,13 @@ class ROSduct(object):
                   'bridgepub': bridgepub}
                  })
 
+        # Get all params and store them for further updates
+        for param in self.parameters:
+            self.last_params[param] = self.client.get_param_value(param)
+
+        from numpy import safe_eval
+        
+
     def create_callback_from_remote_to_local(self, topic_name,
                                              topic_type,
                                              rospub):
@@ -159,10 +167,10 @@ class ROSduct(object):
                                              topic_type,
                                              bridgepub):
         def callback_local_to_remote(message):
-            rospy.loginfo("Local subscriber from topic " +
-                          topic_name + ' of type ' +
-                          topic_type + ' got data: ' + str(message) +
-                          ' which is republished remotely.')
+            rospy.logdebug("Local subscriber from topic " +
+                           topic_name + ' of type ' +
+                           topic_type + ' got data: ' + str(message) +
+                           ' which is republished remotely.')
             dict_msg = from_ROS_to_dict(message)
             bridgepub.publish(dict_msg)
         return callback_local_to_remote
@@ -182,7 +190,8 @@ class ROSduct(object):
             def peer_subscribe(this, tn, tp, pp):
                 # Only make a new subscriber if there wasn't one
                 if this.bridgesub is None:
-                    rospy.logdebug("We have a first subscriber to: " + topic_name)
+                    rospy.logdebug(
+                        "We have a first subscriber to: " + topic_name)
                     this.bridgesub = self.client.subscriber(
                         topic_name,
                         topic_type,
@@ -195,7 +204,8 @@ class ROSduct(object):
             def peer_unsubscribe(this, tn, num_peers):
                 # Unsubscribe if there isnt anyone left
                 if num_peers < 1:
-                    rospy.logdebug("There are no more subscribers to: " + topic_name)
+                    rospy.logdebug(
+                        "There are no more subscribers to: " + topic_name)
                     self.client.unsubscribe(this.bridgesub)
                     this.bridgesub = None
                     # May be redundant if it's actually a reference to this.bridgesub already
@@ -232,9 +242,15 @@ class ROSduct(object):
     def sync_params(self):
         """
         Sync parameter server in between
-        external and local roscore.
+        external and local roscore (local changes
+        are not forwarded).
         """
-        pass
+        for param in self.parameters:
+            # Get remote param
+            remote_param = self.client.get_param_value(param)
+            if remote_param != self.last_params[param]:
+                rospy.set_param(param, remote_param)
+                self.last_params[param] = remote_param
 
     def spin(self):
         """

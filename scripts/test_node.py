@@ -51,6 +51,10 @@ class Test(object):
                 raise e
             print "Service call failed: %s" % e
 
+    def _params(self):
+        curr_param = rospy.get_param('/test_suite/param_1', True)
+        rospy.set_param('/test_suite/param_1', not curr_param)
+
     def run(self):
 
         print "Running tests..."
@@ -58,6 +62,7 @@ class Test(object):
             while True:
                 self._publish()
                 self._service_proxy()
+                self._params()
                 self.r.sleep()
         except KeyboardInterrupt:
             self.sub.unregister()

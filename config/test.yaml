@@ -20,5 +20,5 @@ local_services: [
                     ['/test_suite/service_2', 'roscpp/GetLoggers']
                     ]
 # Parameters to be sync, they will be polled to stay in sync
-parameters: ['/robot_description']
+parameters: ['/robot_description', '/test_suite/param_1']
 parameter_polling_hz: 1

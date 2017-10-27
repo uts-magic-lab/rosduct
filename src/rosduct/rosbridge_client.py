@@ -6,22 +6,27 @@ import threading
 import time
 import json
 import uuid
+from ast import literal_eval
 from ws4py.client.threadedclient import WebSocketClient
 # sudo pip install PyDispatcher
 from pydispatch import dispatcher
 
 
 class ROSBridgeClient(WebSocketClient):
-    """ROSBridgeClient extends WebSocketClient and manages connection to the server and all interactions with ROS.
+    """ROSBridgeClient extends WebSocketClient and manages connection to the
+    server and all interactions with ROS.
 
-    It keeps a record of all publishers, subscriber, service request callbacks, service servers and action clients.
+    It keeps a record of all publishers, subscriber, service request callbacks,
+    service servers and action clients.
     """
+
     def __init__(self, ip, port=9090):
-        """Constructor for ROSBridgeClient
+        """Constructor for ROSBridgeClient.
 
         Args:
             ip (str): The robot IP address.
-            port (int, optional): The WebSocket port number for rosbridge. Defaults to 9090.
+            port (int, optional): The WebSocket port number for rosbridge.
+                Defaults to 9090.
         """
         WebSocketClient.__init__(self, 'ws://{}:{}'.format(ip, port))
         self._connected = False
@@ -77,7 +82,8 @@ class ROSBridgeClient(WebSocketClient):
         Returns:
             The type of the given topic
         """
-        service_client = self.service_client('/rosapi/topic_type', 'rosapi/TopicType')
+        service_client = self.service_client(
+            '/rosapi/topic_type', 'rosapi/TopicType')
         result = {
             'responded': False,
             'type': None
@@ -99,7 +105,8 @@ class ROSBridgeClient(WebSocketClient):
         Returns:
             A list of service names.
         """
-        service_client = self.service_client('/rosapi/services', 'rosapi/Services')
+        service_client = self.service_client(
+            '/rosapi/services', 'rosapi/Services')
         result = {
             'responded': False,
             'services': []
@@ -124,7 +131,8 @@ class ROSBridgeClient(WebSocketClient):
         Returns:
             The type of the given service
         """
-        service_client = self.service_client('/rosapi/service_type', 'rosapi/ServiceType')
+        service_client = self.service_client(
+            '/rosapi/service_type', 'rosapi/ServiceType')
         result = {
             'responded': False,
             'type': None
@@ -140,13 +148,14 @@ class ROSBridgeClient(WebSocketClient):
             time.sleep(0.1)
         return result.get('type')
 
-    def get_params(self):
+    def get_params_names(self):
         """Get params list, like using `rosparam list`.
 
         Returns:
             A list of parameter names.
         """
-        service_client = self.service_client('/rosapi/get_param_names', 'rosapi/GetParamNames')
+        service_client = self.service_client(
+            '/rosapi/get_param_names', 'rosapi/GetParamNames')
         result = {
             'responded': False,
             'params': []
@@ -162,16 +171,17 @@ class ROSBridgeClient(WebSocketClient):
             time.sleep(0.1)
         return result.get('params')
 
-    def get_param_value(self, param_name):
+    def get_param(self, param_name, default_value=None):
         """Get the value of a parameter with the given name, like using `rosparam get`.
 
         Args:
             param_name (str): The name of the parameter.
 
         Returns:
-            The value of the parameter if exist.
+            The value of the parameter if exist, None otherwise.
         """
-        service_client = self.service_client('/rosapi/get_param', 'rosapi/GetParam')
+        service_client = self.service_client(
+            '/rosapi/get_param', 'rosapi/GetParam')
         result = {
             'responded': False,
             'value': None
@@ -186,9 +196,11 @@ class ROSBridgeClient(WebSocketClient):
         service_client.request({'name': param_name}, cb)
         while not result.get('responded'):
             time.sleep(0.1)
-        return result.get('value')
+        if result.get('value') == 'null':
+            return default_value
+        return literal_eval(result.get('value'))
 
-    def set_param_value(self, param_name, value):
+    def set_param(self, param_name, value):
         """Get the value of a parameter with the given name, like using `rosparam get`.
 
         Args:
@@ -198,7 +210,8 @@ class ROSBridgeClient(WebSocketClient):
         Returns:
             Whether the set operation is successful or not.
         """
-        service_client = self.service_client('/rosapi/set_param', 'rosapi/SetParam')
+        service_client = self.service_client(
+            '/rosapi/set_param', 'rosapi/SetParam')
         result = {
             'responded': False,
             'succeed': False
@@ -208,20 +221,24 @@ class ROSBridgeClient(WebSocketClient):
             result['succeed'] = success
             result['responded'] = True
 
-        service_client.request({'name': param_name, 'value': json.dumps(value)}, cb)
+        service_client.request(
+            {'name': param_name, 'value': json.dumps(value)}, cb)
         while not result.get('responded'):
             time.sleep(0.1)
         return result.get('succeed')
 
     def publisher(self, topic_name, message_type, latch=False, queue_size=1):
-        """Create a _Publisher object if the given topic hasn't been advertised, otherwise return the existing
+        """Create a _Publisher object if the given topic hasn't been advertised,
+        otherwise return the existing
         publisher that is currently advertising the topic.
 
         Args:
             topic_name (str): The ROS topic name.
-            message_type (str): The ROS message type, such as `std_msgs/String`.
-            latch (bool, optional): Whether the topic is latched when publishing. Defaults to False.
-            queue_size (int): The queue created at bridge side for re-publishing. Defaults to 1.
+            message_type (str): The ROS message type as `std_msgs/String`.
+            latch (bool, optional): Wether the topic is latched when publishing.
+                Defaults to False.
+            queue_size (int): The queue created at bridge side for republishing.
+                Defaults to 1.
 
         Returns:
             A _Publisher object.
@@ -231,7 +248,8 @@ class ROSBridgeClient(WebSocketClient):
             publisher.usage += 1
         else:
             print('Advertising topic {} for publishing'.format(topic_name))
-            publisher = _Publisher(self, topic_name, message_type, latch, queue_size)
+            publisher = _Publisher(
+                self, topic_name, message_type, latch, queue_size)
             self._publishers[topic_name] = publisher
         return publisher
 
@@ -248,22 +266,26 @@ class ROSBridgeClient(WebSocketClient):
     def subscriber(self, topic_name, message_type, cb):
         """Create a _Subscriber object on a given topic with a callback function.
 
-        If the topic hasn't been subscribed yet, subscribe the topic. Otherwise, it adds the subscriber
+        If the topic hasn't been subscribed yet, subscribe the topic.
+        Otherwise, it adds the subscriber
         with callback function into the topic subscription list.
 
         Args:
             topic_name (str): The ROS topic name.
-            message_type (str): The ROS message type, such as `std_msgs/String`.
-            cb (function): A function will be called when a message is received on that topic.
+            message_type (str): The ROS message type, such as std_msgs/String.
+            cb (function): A function will be called when a message is
+                received on that topic.
 
         Returns:
             A _Subscriber object.
         """
         subscriber = _Subscriber(self, topic_name, cb)
         if topic_name in self._subscribers:
-            self._subscribers.get(topic_name).get('subscribers').append(subscriber)
+            self._subscribers.get(topic_name).get(
+                'subscribers').append(subscriber)
         else:
-            subscribe_id = 'subscribe:{}:{}'.format(topic_name, self._id_counter)
+            subscribe_id = 'subscribe:{}:{}'.format(
+                topic_name, self._id_counter)
             print('Sending request to subscribe topic {}'.format(topic_name))
             self.send(json.dumps({
                 'op': 'subscribe',
@@ -279,10 +301,12 @@ class ROSBridgeClient(WebSocketClient):
     def unsubscribe(self, subscriber):
         """Remove a callback subscriber from its topic subscription list.
 
-        If there is no callback subscribers in the subscription list. It will unsubscribe the topic.
+        If there is no callback subscribers in the subscription list.
+            It will unsubscribe the topic.
 
         Args:
-            subscriber (_Subscriber): A subscriber with callback function that listen to the topic.
+            subscriber (_Subscriber): A subscriber with callback function
+                that listen to the topic.
         """
         topic_name = subscriber.topic_name
         if topic_name not in self._subscribers:
@@ -318,7 +342,8 @@ class ROSBridgeClient(WebSocketClient):
 
         Args:
             service_id (str): The service request ID.
-            cb (function): A function will be called when the service server responses.
+            cb (function): A function will be called when the service
+                server responses.
         """
         self._service_clients[service_id] = cb
 
@@ -328,14 +353,16 @@ class ROSBridgeClient(WebSocketClient):
         Args:
             service_name (str): The ROS service name.
             service_type (str): The ROS service type.
-            handler (function): A callback function takes the service request and gives service response.
+            handler (function): A callback function takes the service
+                request and gives service response.
 
         Returns:
             A _ServiceServer object
         """
         if service_name in self._service_servers:
             self._service_servers[service_name].unregister()
-        service_server = _ServiceServer(self, service_name, service_type, handler)
+        service_server = _ServiceServer(
+            self, service_name, service_type, handler)
         self._service_servers[service_name] = service_server
         return service_server
 
@@ -344,7 +371,8 @@ class ROSBridgeClient(WebSocketClient):
 
         Args:
             service_name (str): The ROS service name.
-            handler (function): A callback function takes the service request and gives service response.
+            handler (function): A callback function takes the service request
+                and gives service response.
         """
         self._service_servers[service_name] = handler
 
@@ -355,12 +383,13 @@ class ROSBridgeClient(WebSocketClient):
             service_name (str): The ROS service name.
         """
         if service_name in self._service_servers:
-            print('Stop advertising service server {} for publishing'.format(service_name))
+            print('Stop advertising service server {} for publishing'.format(
+                service_name))
             del self._service_servers[service_name]
 
     def action_client(self, server_name, action_name):
-        """Create a ROS action client if there was no client created for the action server.
-        Otherwise return that action client.
+        """Create a ROS action client if there was no client created for
+        the action server. Otherwise return that action client.
 
         Args:
             server_name (str): The ROS action server name.
@@ -370,14 +399,16 @@ class ROSBridgeClient(WebSocketClient):
             A _ActionClient object.
         """
         if server_name + ':' + action_name in self._action_clients:
-            action_client = self._action_clients.get(server_name + ':' + action_name).get('action_client')
+            action_client = self._action_clients.get(
+                server_name + ':' + action_name).get('action_client')
             action_client.usage += 1
         else:
             action_client = _ActionClient(self, server_name, action_name)
         return action_client
 
     def unregister_action_client(self, server_name, action_name):
-        """Unregister the action client with server and action name. Remove it from the internal action client dict.
+        """Unregister the action client with server and action name. Remove
+            it from the internal action client dict.
 
         Args:
             server_name (str): The ROS action server name.
@@ -403,10 +434,12 @@ class ROSBridgeClient(WebSocketClient):
     def received_message(self, message):
         """Called when message received from ROS server.
 
-        Only handle the message with `topic` or `service` keywords and trigger corresponding callback functions.
+        Only handle the message with `topic` or `service` keywords and trigger
+        corresponding callback functions.
 
         Args:
-            message(ws4py.messaging.Message): A message that sent from ROS server.
+            message(ws4py.messaging.Message): A message that sent from
+                ROS server.
         """
         data = json.loads(message.data)
         if 'topic' in data:
@@ -425,7 +458,8 @@ class ROSBridgeClient(WebSocketClient):
                 service_id = data.get('id')
                 args = data.get('args')
                 if service_name in self._service_servers:
-                    result, values = self._service_servers[service_name].run_handler(args)
+                    result, values = self._service_servers[service_name].run_handler(
+                        args)
                     self.send(json.dumps({
                         'op': 'service_response',
                         'service': service_name,
@@ -455,17 +489,21 @@ class ROSBridgeClient(WebSocketClient):
 
 
 class _Publisher(object):
-    def __init__(self, rosbridge, topic_name, message_type, latch=False, queue_size=1):
+    def __init__(self, rosbridge, topic_name, message_type,
+                 latch=False, queue_size=1):
         """Constructor for _Publisher.
 
         Args:
             rosbridge (ROSBridgeClient): The ROSBridgeClient object.
             topic_name (str): The ROS topic name.
-            message_type (str): The ROS message type, such as `std_msgs/String`.
-            latch (bool, optional): Whether the topic is latched when publishing. Defaults to False.
-            queue_size (int): The queue created at bridge side for re-publishing. Defaults to 1.
+            message_type (str): The ROS message type, such as std_msgs/String.
+            latch (bool, optional): Whether the topic is latched when publishing.
+                Defaults to False.
+            queue_size (int): The queue created at bridge side for re-publishing.
+                Defaults to 1.
         """
-        self._advertise_id = 'advertise:{}:{}'.format(topic_name, rosbridge.id_counter)
+        self._advertise_id = 'advertise:{}:{}'.format(
+            topic_name, rosbridge.id_counter)
         self._rosbridge = rosbridge
         self._topic_name = topic_name
         self._usage = 1
@@ -495,15 +533,17 @@ class _Publisher(object):
         """
         self._rosbridge.send(json.dumps({
             'op': 'publish',
-            'id': 'publish:{}:{}'.format(self._topic_name, self._rosbridge.id_counter),
+            'id': 'publish:{}:{}'.format(self._topic_name,
+                                         self._rosbridge.id_counter),
             'topic': self._topic_name,
             'msg': message
         }))
 
     def unregister(self):
-        """Reduce the usage of the publisher. If the usage is 0, unadvertise this topic."""
+        """Reduce the usage of the publisher. If the usage is 0,
+        unadvertise this topic."""
         self._usage -= 1
-        if self._usage == 0:
+        if self._usage <= 0:
             self._rosbridge.unregister_publisher(self._topic_name)
             self._rosbridge.send(json.dumps({
                 'op': 'unadvertise',
@@ -519,7 +559,8 @@ class _Subscriber(object):
         Args:
             rosbridge (ROSBridgeClient): The ROSBridgeClient object.
             topic_name (str): The ROS topic name.
-            cb (function): A function will be called when a message is received on that topic.
+            cb (function): A function will be called when a message is
+                received on that topic.
         """
         self._rosbridge = rosbridge
         self._topic_name = topic_name
@@ -554,13 +595,16 @@ class _ServiceClient(object):
         self._service_type = service_type
 
     def request(self, request, cb):
-        """Send a request to the ROS service server. The callback function will be called when service responses.
+        """Send a request to the ROS service server. The callback function
+        will be called when service responses.
 
         Args:
             request (dict): A request message to send,
-            cb (function): A function will be called when the service server responses.
+            cb (function): A function will be called when the service server
+                responses.
         """
-        service_id = 'call_service:{}:{}'.format(self._service_name, self._rosbridge.id_counter)
+        service_id = 'call_service:{}:{}'.format(
+            self._service_name, self._rosbridge.id_counter)
         if callable(cb):
             self._rosbridge.register_service_callback(service_id, cb)
         self._rosbridge.send(json.dumps({
@@ -579,7 +623,8 @@ class _ServiceServer(object):
             rosbridge (ROSBridgeClient): The ROSBridgeClient object.
             service_name (str): The ROS service name.
             service_type (str): The ROS service type.
-            handler (function): A callback function takes the service request and gives service response.
+            handler (function): A callback function takes the service request
+                and gives service response.
         """
         self._rosbridge = rosbridge
         self._service_name = service_name
@@ -626,11 +671,16 @@ class _ActionClient(object):
         self._goals = {}
         self._usage = 1
 
-        self._feedback_sub = rosbridge.subscriber(server_name+'/feedback', action_name+'Feedback', self.on_feedback)
-        self._result_sub = rosbridge.subscriber(server_name+'/result', action_name+'Result', self.on_result)
+        self._feedback_sub = rosbridge.subscriber(
+            server_name + '/feedback', action_name + 'Feedback',
+            self.on_feedback)
+        self._result_sub = rosbridge.subscriber(
+            server_name + '/result', action_name + 'Result', self.on_result)
 
-        self._goal_pub = rosbridge.publisher(server_name+'/goal', action_name+'Goal')
-        self._cancel_pub = rosbridge.publisher(server_name+'/cancel', 'actionlib_msgs/GoalID')
+        self._goal_pub = rosbridge.publisher(
+            server_name + '/goal', action_name + 'Goal')
+        self._cancel_pub = rosbridge.publisher(
+            server_name + '/cancel', 'actionlib_msgs/GoalID')
 
     @property
     def usage(self):
@@ -648,7 +698,8 @@ class _ActionClient(object):
         """
         goal = self._goals.get(message.get('status').get('goal_id').get('id'))
         if goal:
-            goal.feedback_received(message.get('feedback'), message.get('status'))
+            goal.feedback_received(message.get(
+                'feedback'), message.get('status'))
 
     def on_result(self, message):
         """Callback when a result message received.
@@ -665,8 +716,10 @@ class _ActionClient(object):
 
         Args:
             goal_message (dict): A message to send to ROS action server.
-            on_result (function): A callback function to be called when a feedback message received.
-            on_feedback (function): A callback function to be called when a result message received.
+            on_result (function): A callback function to be called when a
+                feedback message received.
+            on_feedback (function): A callback function to be called when a
+                result message received.
         """
         goal = _Goal(goal_message, on_result, on_feedback)
         self._goals[goal.id] = goal
@@ -682,14 +735,16 @@ class _ActionClient(object):
         self._cancel_pub.publish({'id': goal_id})
 
     def unregister(self):
-        """Reduce the usage of the action client. If the usage is 0, unregister its publishers and subscribers."""
+        """Reduce the usage of the action client. If the usage is 0,
+        unregister its publishers and subscribers."""
         self._usage -= 1
         if self._usage == 0:
             self._feedback_sub.unregister()
             self._result_sub.unregister()
             self._goal_pub.unregister()
             self._cancel_pub.unregister()
-            self._rosbridge.unregister_action_client(self._server_name, self._action_name)
+            self._rosbridge.unregister_action_client(
+                self._server_name, self._action_name)
 
 
 class _Goal(object):
@@ -698,8 +753,10 @@ class _Goal(object):
 
         Args:
             message (dict): The goal message to send to ROS action server.
-            on_result (function): A callback function to be called when a feedback message received.
-            on_feedback (function): A callback function to be called when a result message received.
+            on_result (function): A callback function to be called when a
+                feedback message received.
+            on_feedback (function): A callback function to be called when a
+                result message received.
         """
         self._id = 'goal_' + str(uuid.uuid4())
         self._message = message
@@ -734,16 +791,19 @@ class _Goal(object):
         return self._is_finished
 
     def result_received(self, result, status):
-        """Called when a result message is received.
+        """Called when a result message is received from the Action Server (AS).
 
         Args:
             result (dict): The result message.
             status (int): The status code. Such as:
-                ACTIVE = 1: The goal is currently being processed by the action server;
-                PREEMPTED = 2: The goal received a cancel request after it started executing;
-                SUCCEEDED = 3: The goal was achieved successfully by the action server;
-                ABORTED = 4: The goal was aborted during execution by the action server due to some failure.
-                For more details, refer to http://docs.ros.org/indigo/api/actionlib_msgs/html/msg/GoalStatus.html.
+                ACTIVE = 1: The goal is currently being processed by the AS;
+                PREEMPTED = 2: The goal received a cancel request after it
+                    started executing;
+                SUCCEEDED = 3: The goal was achieved successfully by the AS;
+                ABORTED = 4: The goal was aborted during execution by the AS
+                    due to some failure.
+                For more details, refer to
+                http://docs.ros.org/indigo/api/actionlib_msgs/html/msg/GoalStatus.html.
         """
         self._is_finished = True
         if callable(self._on_result):
@@ -755,11 +815,14 @@ class _Goal(object):
         Args:
             feedback (dict): The feedback message.
             status (int): The status code. Such as:
-                ACTIVE = 1: The goal is currently being processed by the action server;
-                PREEMPTED = 2: The goal received a cancel request after it started executing;
-                SUCCEEDED = 3: The goal was achieved successfully by the action server;
-                ABORTED = 4: The goal was aborted during execution by the action server due to some failure.
-                For more details, refer to http://docs.ros.org/indigo/api/actionlib_msgs/html/msg/GoalStatus.html.
+                ACTIVE = 1: The goal is currently being processed by the AS;
+                PREEMPTED = 2: The goal received a cancel request after it
+                    started executing;
+                SUCCEEDED = 3: The goal was achieved successfully by the AS;
+                ABORTED = 4: The goal was aborted during execution by the AS
+                    due to some failure.
+                For more details, refer to
+                http://docs.ros.org/indigo/api/actionlib_msgs/html/msg/GoalStatus.html.
         """
         if callable(self._on_feedback):
             self._on_feedback(feedback, status)
