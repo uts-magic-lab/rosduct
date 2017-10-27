@@ -103,7 +103,7 @@ class ROSduct(object):
 
         # We keep track of the instanced stuff in this dict
         self._instances = {'topics': [],
-                           'servers': []}
+                           'services': []}
         for topic_name, topic_type in self.remote_topics:
             rospub = rospy.Publisher(topic_name,
                                      get_ROS_class(topic_type),
@@ -139,12 +139,45 @@ class ROSduct(object):
                   'bridgepub': bridgepub}
                  })
 
+        # Services
+        for service_name, service_type in self.remote_services:
+            remote_service_client = self.client.service_client(service_name,
+                                                               service_type)
+            r_to_l_serv_cb = self.create_callback_from_remote_to_local_srv(
+                remote_service_client,
+                service_name,
+                service_type)
+            rosserv = rospy.Service(service_name,
+                                    get_ROS_class(service_type,
+                                                  srv=True),
+                                    r_to_l_serv_cb)
+
+            self._instances['services'].append(
+                {service_name:
+                 {'rosserv': rosserv,
+                  'bridgeservclient': remote_service_client}
+                 })
+
+        for service_name, service_type in self.local_services:
+            rosservprox = rospy.ServiceProxy(service_name,
+                                             get_ROS_class(service_type,
+                                                           srv=True))
+            l_to_r_srv_cv = self.create_callback_from_local_to_remote_srv(
+                service_name,
+                service_type,
+                rosservprox)
+            remote_service_server = self.client.service_server(service_name,
+                                                               service_type,
+                                                               l_to_r_srv_cv)
+            self._instances['services'].append(
+                {service_name:
+                 {'rosservprox': rosservprox,
+                  'bridgeservserver': remote_service_server}
+                 })
+
         # Get all params and store them for further updates
         for param in self.parameters:
-            self.last_params[param] = self.client.get_param_value(param)
-
-        from numpy import safe_eval
-        
+            self.last_params[param] = self.client.get_param(param)
 
     def create_callback_from_remote_to_local(self, topic_name,
                                              topic_type,
@@ -215,6 +248,53 @@ class ROSduct(object):
                             break
         return CustomSubscribeListener()
 
+    def create_callback_from_remote_to_local_srv(self,
+                                                 remote_service_client,
+                                                 service_name,
+                                                 service_type):
+        def callback_from_local_srv_call(request):
+            rospy.loginfo("Got a SRV call to " + service_name +
+                          " of type " + service_type)
+            req_dict = from_ROS_to_dict(request)
+
+            result = {
+                'responded': False,
+                'response': None
+            }
+
+            def cb(success, response):
+                result['responded'] = True
+                if success:
+                    result['response'] = response
+            remote_service_client.request(req_dict, cb)
+            while not rospy.is_shutdown() and not result['responded']:
+                rospy.sleep(0.1)
+            if result['response'] is None:
+                rospy.logerr('Service call didnt succeed (' + str(service_name) +
+                             ' of type ' + str(service_type))
+                return None
+            return from_dict_to_ROS(result['response'],
+                                    service_type + 'Response',
+                                    srv=True)
+        return callback_from_local_srv_call
+
+    def create_callback_from_local_to_remote_srv(self,
+                                                 service_name,
+                                                 service_type,
+                                                 rosservprox):
+
+        def callback_from_remote_service_call(request):
+            ros_req = from_dict_to_ROS(request, service_type + 'Request',
+                                       srv=True)
+            rospy.loginfo("Waiting for server " + service_name + "...")
+            rospy.wait_for_service(service_name)
+            # TODO: error handling in services...
+            resp = rosservprox.call(ros_req)
+            resp_dict = from_ROS_to_dict(resp)
+            return True, resp_dict
+
+        return callback_from_remote_service_call
+
     def check_if_msgs_are_installed(self):
         """
         Check if the provided message types are installed.
@@ -247,7 +327,7 @@ class ROSduct(object):
         """
         for param in self.parameters:
             # Get remote param
-            remote_param = self.client.get_param_value(param)
+            remote_param = self.client.get_param(param)
             if remote_param != self.last_params[param]:
                 rospy.set_param(param, remote_param)
                 self.last_params[param] = remote_param

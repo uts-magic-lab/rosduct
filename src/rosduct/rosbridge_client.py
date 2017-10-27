@@ -196,9 +196,14 @@ class ROSBridgeClient(WebSocketClient):
         service_client.request({'name': param_name}, cb)
         while not result.get('responded'):
             time.sleep(0.1)
-        if result.get('value') == 'null':
+        # skip unicode
+        param_value = str(result.get('value'))
+        if param_value == 'null':
             return default_value
-        return literal_eval(result.get('value'))
+        # JSON returns true and false in lower case starting letter...
+        if param_value == 'false' or param_value == 'true':
+            param_value = param_value[0].upper() + param_value[1:]
+        return literal_eval(param_value)
 
     def set_param(self, param_name, value):
         """Get the value of a parameter with the given name, like using `rosparam get`.

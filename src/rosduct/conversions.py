@@ -63,7 +63,7 @@ def is_ros_service_installed(ros_message_type):
         return True
 
 
-def get_ROS_class(ros_message_type):
+def get_ROS_class(ros_message_type, srv=False):
     """
     Returns the ROS message class from ros_message_type.
     :return AnyMsgClass: Class of the ROS message.
@@ -74,12 +74,19 @@ def get_ROS_class(ros_message_type):
         raise ValueError(
             'ros_message_type should be in the shape of package_msgs/Message' +
             ' (it was ' + ros_message_type + ')')
-    msg_class = locate('{}.msg.{}'.format(package_name, message_name))
+    if not srv:
+        msg_class = locate('{}.msg.{}'.format(package_name, message_name))
+    else:
+        msg_class = locate('{}.srv.{}'.format(package_name, message_name))
     if msg_class is None:
+        if srv:
+            msg_or_srv = '.srv'
+        else:
+            msg_or_srv = '.msg'
         raise ValueError(
-            'ros_message_type could not imported. (' +
+            'ros_message_type could not be imported. (' +
             ros_message_type + ', as "from ' + package_name +
-            '.msg import ' + message_name + '" failed.')
+            msg_or_srv + ' import ' + message_name + '" failed.')
     return msg_class
 
 
@@ -96,12 +103,12 @@ def from_ROS_to_dict(ros_msg):
     return yaml.load(ros_msg.__str__())
 
 
-def from_dict_to_ROS(dict_msg, ros_message_type):
+def from_dict_to_ROS(dict_msg, ros_message_type, srv=False):
     """
     Converts from a dict representation of a ROS message to a
     ROS message instance.
     """
-    msg_class = get_ROS_class(ros_message_type)
+    msg_class = get_ROS_class(ros_message_type, srv=srv)
     msg_instance = msg_class()
     # Workaround
     if len(dict_msg) == 1:
@@ -110,12 +117,13 @@ def from_dict_to_ROS(dict_msg, ros_message_type):
     return msg_instance
 
 
-def from_JSON_to_ROS(json_msg, ros_message_type):
+def from_JSON_to_ROS(json_msg, ros_message_type, srv=False):
     """
     Converts from a dict representation of a ROS message to a
     ROS message instance.
     """
-    return from_dict_to_ROS(from_JSON_to_dict(json_msg), ros_message_type)
+    return from_dict_to_ROS(from_JSON_to_dict(json_msg),
+                            ros_message_type, srv=srv)
 
 
 def from_JSON_to_dict(json_msg):
