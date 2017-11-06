@@ -1,0 +1,30 @@
+# Example for unifying multiple robots
+# You need to make a launch file
+# and a config file for every robot.
+# Setting a third parameter on every topic/service
+# allows to separate the robots in the local roscore
+# ROSbridge websocket server info
+# ROSbridge websocket server info
+rosbridge_ip: localhost
+rosbridge_port: 9090
+# Topics being published in the robot to expose locally
+remote_topics: [
+                    ['/test_suite/header_2', 'std_msgs/Header', '/robot1/header_2'],
+                    ['/test_suite/text_1', 'std_msgs/String']
+                    ]
+# Topics being published in the local roscore to expose remotely
+local_topics: [
+                    ['/test_suite/header_1', 'std_msgs/Header', '/robot1/header_1'],
+                    ['/test_suite/text_2', 'std_msgs/String']
+                    ]
+# Services running in the robot to expose locally
+remote_services: [
+                    ['/test_suite/service_1', 'roscpp/GetLoggers', '/robot1/service_1']
+                    ]
+# Services running locally to expose to the robot
+local_services: [
+                    ['/test_suite/service_2', 'roscpp/GetLoggers', '/robot1/service_2']
+                    ]
+# Parameters to be sync, they will be polled to stay in sync
+parameters: [['/test_suite/param_2', '/robot1/param_2'], '/test_suite/param_1']
+parameter_polling_hz: 1

@@ -79,6 +79,7 @@ class ROSduct(object):
         # Parameters
         self.rate_hz = rospy.get_param('~parameter_polling_hz', 1)
         self.parameters = rospy.get_param('~parameters', [])
+        rospy.loginfo("Parameters: " + str(self.parameters))
         self.last_params = {}
 
         self.check_if_msgs_are_installed()
@@ -104,8 +105,13 @@ class ROSduct(object):
         # We keep track of the instanced stuff in this dict
         self._instances = {'topics': [],
                            'services': []}
-        for topic_name, topic_type in self.remote_topics:
-            rospub = rospy.Publisher(topic_name,
+        for r_t in self.remote_topics:
+            if len(r_t) == 2:
+                topic_name, topic_type = r_t
+                local_name = topic_name
+            elif len(r_t) == 3:
+                topic_name, topic_type, local_name = r_t
+            rospub = rospy.Publisher(local_name,
                                      get_ROS_class(topic_type),
                                      # SubscribeListener added later
                                      queue_size=1)
@@ -123,8 +129,14 @@ class ROSduct(object):
                   'bridgesub': None}
                  })
 
-        for topic_name, topic_type in self.local_topics:
-            bridgepub = self.client.publisher(topic_name, topic_type)
+        for l_t in self.local_topics:
+            if len(l_t) == 2:
+                topic_name, topic_type = l_t
+                remote_name = topic_name
+            elif len(l_t) == 3:
+                topic_name, topic_type, remote_name = l_t
+
+            bridgepub = self.client.publisher(remote_name, topic_type)
 
             cb_l_to_r = self.create_callback_from_local_to_remote(topic_name,
                                                                   topic_type,
@@ -140,14 +152,19 @@ class ROSduct(object):
                  })
 
         # Services
-        for service_name, service_type in self.remote_services:
+        for r_s in self.remote_services:
+            if len(r_s) == 2:
+                service_name, service_type = r_s
+                local_name = service_name
+            elif len(r_s) == 3:
+                service_name, service_type, local_name = r_s
             remote_service_client = self.client.service_client(service_name,
                                                                service_type)
             r_to_l_serv_cb = self.create_callback_from_remote_to_local_srv(
                 remote_service_client,
                 service_name,
                 service_type)
-            rosserv = rospy.Service(service_name,
+            rosserv = rospy.Service(local_name,
                                     get_ROS_class(service_type,
                                                   srv=True),
                                     r_to_l_serv_cb)
@@ -158,7 +175,12 @@ class ROSduct(object):
                   'bridgeservclient': remote_service_client}
                  })
 
-        for service_name, service_type in self.local_services:
+        for l_s in self.local_services:
+            if len(l_s) == 2:
+                service_name, service_type = l_s
+                remote_name = service_name
+            elif len(l_s) == 3:
+                service_name, service_type, remote_name = l_s
             rosservprox = rospy.ServiceProxy(service_name,
                                              get_ROS_class(service_type,
                                                            srv=True))
@@ -166,7 +188,7 @@ class ROSduct(object):
                 service_name,
                 service_type,
                 rosservprox)
-            remote_service_server = self.client.service_server(service_name,
+            remote_service_server = self.client.service_server(remote_name,
                                                                service_type,
                                                                l_to_r_srv_cv)
             self._instances['services'].append(
@@ -177,6 +199,9 @@ class ROSduct(object):
 
         # Get all params and store them for further updates
         for param in self.parameters:
+            if type(param) == list:
+                # remote param name is the first one
+                param = param[0]
             self.last_params[param] = self.client.get_param(param)
 
     def create_callback_from_remote_to_local(self, topic_name,
@@ -299,22 +324,38 @@ class ROSduct(object):
         """
         Check if the provided message types are installed.
         """
-        for _, topic_type in self.remote_topics:
+        for rt in self.remote_topics:
+            if len(rt) == 2:
+                _, topic_type = rt
+            elif len(rt) == 3:
+                _, topic_type, _ = rt
             if not is_ros_message_installed(topic_type):
                 rospy.logwarn(
                     "{} could not be found in the system.".format(topic_type))
 
-        for _, topic_type in self.local_topics:
+        for lt in self.local_topics:
+            if len(lt) == 2:
+                _, topic_type = lt
+            elif len(lt) == 3:
+                _, topic_type, _ = lt
             if not is_ros_message_installed(topic_type):
                 rospy.logwarn(
                     "{} could not be found in the system.".format(topic_type))
 
-        for _, service_type in self.remote_services:
+        for rs in self.remote_services:
+            if len(rs) == 2:
+                _, service_type = rs
+            elif len(rs) == 3:
+                _, service_type, _ = rs
             if not is_ros_service_installed(service_type):
                 rospy.logwarn(
                     "{} could not be found in the system.".format(service_type))
 
-        for _, service_type in self.local_services:
+        for ls in self.local_services:
+            if len(ls) == 2:
+                _, service_type = ls
+            elif len(ls) == 3:
+                _, service_type, _ = ls
             if not is_ros_service_installed(service_type):
                 rospy.logwarn(
                     "{} could not be found in the system.".format(service_type))
@@ -326,10 +367,15 @@ class ROSduct(object):
         are not forwarded).
         """
         for param in self.parameters:
+            if type(param) == list:
+                local_param = param[1]
+                param = param[0]
+            else:
+                local_param = param
             # Get remote param
             remote_param = self.client.get_param(param)
             if remote_param != self.last_params[param]:
-                rospy.set_param(param, remote_param)
+                rospy.set_param(local_param, remote_param)
                 self.last_params[param] = remote_param
 
     def spin(self):

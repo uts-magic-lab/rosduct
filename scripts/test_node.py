@@ -54,6 +54,8 @@ class Test(object):
     def _params(self):
         curr_param = rospy.get_param('/test_suite/param_1', True)
         rospy.set_param('/test_suite/param_1', not curr_param)
+        curr_param = rospy.get_param('/test_suite/param_2', True)
+        rospy.set_param('/test_suite/param_2', not curr_param)
 
     def run(self):
 
