@@ -36,3 +36,5 @@ local_services: [
 parameters: ['/robot_description']
 parameter_polling_hz: 1
 ```
+
+**Note**: Don't add to remote or local topics the topic `/rosout`.
